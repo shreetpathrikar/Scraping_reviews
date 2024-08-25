@@ -4,6 +4,8 @@ import requests
 from bs4 import BeautifulSoup as bs
 from urllib.request import urlopen as uReq
 import ssl
+import six
+import urllib3
 
 app = Flask(__name__)
 
