@@ -14,5 +14,7 @@ RUN pip install requests six
 # Copy the project files to the working directory
 COPY . .
 
+EXPOSE 3000
+
 # Define the entrypoint for the container
 ENTRYPOINT ["python", "app.py"]
