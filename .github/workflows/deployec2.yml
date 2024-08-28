@@ -1,0 +1,47 @@
+name: Deploy to EC2
+
+on:
+  push:
+    branches: [ main ]  # Trigger on pushes to the main branch
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Configure AWS credentials (temporary)
+        uses: aws-actions/configure-aws-credentials@v1
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          region: us-east-1  # Update with your region if different
+
+      - name: Get EC2 public IP address (optional)
+        id: get_ec2_ip
+        run: |
+          aws ec2 describe-instances | jq -r '.Reservations[].Instances[] | select(.State.Name == "running") | .PublicIpAddress'
+        shell: bash
+
+      - name: Upload code to S3 bucket (recommended)
+        uses: aws-actions/upload-bucket-objects@v2.0.1
+        if: steps.get_ec2_ip.outputs == ''  # Only upload to S3 if no running EC2 instance found
+        with:
+          s3-bucket: my-code-bucket  # Replace with your bucket name
+          src-folder: .
+          path: ${{ github.sha }}  # Upload code with unique path based on commit SHA
+
+      - name: Download code from S3 on EC2 (optional)
+        if: steps.get_ec2_ip.outputs != ''  # Download from S3 only if running EC2 instance found
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} ubuntu@${{ steps.get_ec2_ip.outputs }}  \
+             "aws s3 cp s3://my-code-bucket/${{ github.sha }} /tmp/code"
+
+      - name: Run deployment script on EC2 (optional)
+        if: steps.get_ec2_ip.outputs != ''  # Run script only if running EC2 instance found
+        run: |
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.EC2_SSH_KEY }} ubuntu@${{ steps.get_ec2_ip }}  \
+             "cd /tmp/code && chmod +x deploy.sh && ./deploy.sh"
+
+      - name: Cleanup temporary credentials (recommended)
+        run: rm -rf ~/.aws
